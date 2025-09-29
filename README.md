@@ -14,6 +14,7 @@ and these repos:
 - https://github.com/mcy/strings/tree/main/allman
 - https://github.com/rust-analyzer/rowan
 
+- https://github.com/rust-lang/rust/blob/21a13b8864a7dd614e9a96afd57b58c7fcf0bd6b/compiler/rustc_lexer/src/lib.rs#L51
 
 TODO:
 
@@ -22,3 +23,4 @@ TODO:
 - [ ] Layout Engine
 - [ ] Typed View
 - [ ] CLI
+- [ ] Fuzzing
