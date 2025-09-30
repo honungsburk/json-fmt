@@ -2,6 +2,7 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TokenKind {
     Comma,
+    Colon,
     LineComment,
     Whitespace,
     Number,
@@ -13,6 +14,8 @@ pub enum TokenKind {
     RightBracket,
     LeftCurly,
     RightCurly,
+    Slash,
+    Unknown,
     Eof,
 }
 
@@ -22,5 +25,5 @@ pub enum TokenKind {
 #[derive(Debug)]
 pub struct Token {
     pub kind: TokenKind,
-    pub len: u32,
+    pub len: usize,
 }

@@ -1,27 +1,55 @@
 #![allow(bad_style)]
 
-use std::rc::Rc;
+use std::{ffi::os_str::Display, rc::Rc};
 
-#[derive(PartialEq, Eq, Clone)]
-pub enum Branch {
-    Node(Node),
-    Token(Token),
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub enum SyntaxBranch {
+    Node(SyntaxNode),
+    Token(SyntaxToken),
 }
 
-#[derive(PartialEq, Eq, Clone)]
-pub struct Node {
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub struct SyntaxNode {
     kind: SyntaxKind,
     text_len: usize,
-    children: Vec<Rc<Branch>>,
+    children: Vec<Rc<SyntaxBranch>>,
 }
 
-#[derive(PartialEq, Eq, Clone)]
-pub struct Token {
+impl SyntaxNode {
+    /// Clones the tree creating an entire new subtree that is not just a ref to the old one
+    pub fn clone_subtree(&self) -> SyntaxNode {
+        todo!("not implemented")
+    }
+
+    /// Not sure how this one clones
+    pub fn clone_for_update(&self) -> SyntaxNode {
+        todo!("not implemented")
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub struct SyntaxToken {
     kind: SyntaxKind,
     text: String,
 }
 
-#[derive(PartialEq, Eq, Clone)]
+impl SyntaxToken {
+    pub fn kind(&self) -> SyntaxKind {
+        self.kind.clone()
+    }
+
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+}
+
+impl std::fmt::Display for SyntaxToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.text())
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Hash, Copy)]
 pub enum SyntaxKind {
     ERROR,
     EOF,
