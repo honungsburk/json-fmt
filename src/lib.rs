@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod parser;
 pub mod position;
 pub mod scanner;
 pub mod syntax;
