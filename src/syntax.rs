@@ -1,6 +1,6 @@
 #![allow(bad_style)]
 
-use std::{ffi::os_str::Display, rc::Rc};
+use std::rc::Rc;
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum SyntaxBranch {

@@ -1,7 +1,4 @@
-use crate::{
-    ast::AstToken,
-    syntax::{self, *},
-};
+use crate::{ast::AstToken, syntax::*};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Whitespace {

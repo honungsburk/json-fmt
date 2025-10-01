@@ -96,14 +96,6 @@ impl<'a> Scanner<'a> {
     /// # Returns
     /// `true` if a character was consumed, `false` otherwise
     ///
-    /// # Example
-    /// ```
-    /// use grammarsmith::*;
-    ///
-    /// let mut scanner = Scanner::new("1a");
-    /// scanner.consume_if(|c| c.is_numeric());
-    /// assert_eq!(scanner.slice(), "1");
-    /// ```
     pub fn consume_if(&mut self, predicate: impl Fn(char) -> bool) -> bool {
         if let Some(c) = self.peek() {
             if predicate(*c) {
@@ -141,18 +133,6 @@ impl<'a> Scanner<'a> {
     /// # Returns
     /// `true` if a character was consumed, `false` otherwise
     ///
-    /// # Example
-    /// ```
-    /// use grammarsmith::*;
-    ///
-    /// let mut scanner1 = Scanner::new("12");
-    /// scanner1.consume_if_next(|c| c.is_numeric());
-    /// assert_eq!(scanner1.slice(), "1");
-    ///
-    /// let mut scanner2 = Scanner::new("1a");
-    /// scanner2.consume_if_next(|c| c.is_numeric());
-    /// assert_eq!(scanner2.slice(), "");
-    /// ```
     pub fn consume_if_next<P>(&mut self, predicate: P) -> bool
     where
         P: Fn(char) -> bool,

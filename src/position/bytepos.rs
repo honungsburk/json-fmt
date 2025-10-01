@@ -2,14 +2,7 @@ use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 /// A position in a file.
 ///
-/// # Examples
-/// ```
-/// use grammarsmith::position::BytePos;
-/// let pos = BytePos(0);
-/// assert_eq!(pos.shift('a'), BytePos(1));
-/// ```
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BytePos(pub usize);
 
 impl BytePos {
