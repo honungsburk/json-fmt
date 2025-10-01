@@ -50,7 +50,38 @@ impl TreeBuilder {
             ""
         };
 
-        let syntax_token = SyntaxToken::new(token_kind_to_syntax_kind(token.kind), text.to_string());
+        let syntax_token =
+            SyntaxToken::new(token_kind_to_syntax_kind(token.kind), text.to_string());
+        let syntax_branch = Rc::new(SyntaxBranch::Token(syntax_token));
+
+        if let Some(current) = self.stack.last_mut() {
+            current.children.push(syntax_branch);
+            current.text_len += token.len;
+        }
+    }
+
+    pub fn add_token_with_trivia(
+        &mut self,
+        token: Token,
+        source: &str,
+        offset: usize,
+        leading_trivia: Vec<SyntaxToken>,
+        trailing_trivia: Vec<SyntaxToken>,
+    ) {
+        let start = offset;
+        let end = start + token.len;
+        let text = if end <= source.len() {
+            &source[start..end]
+        } else {
+            ""
+        };
+
+        let syntax_token = SyntaxToken::new_with_trivia(
+            token_kind_to_syntax_kind(token.kind),
+            text.to_string(),
+            leading_trivia,
+            trailing_trivia,
+        );
         let syntax_branch = Rc::new(SyntaxBranch::Token(syntax_token));
 
         if let Some(current) = self.stack.last_mut() {
@@ -64,7 +95,9 @@ impl TreeBuilder {
             let node = SyntaxNode::new(builder.kind, builder.text_len, builder.children);
 
             if let Some(parent) = self.stack.last_mut() {
-                parent.children.push(Rc::new(SyntaxBranch::Node(node.clone())));
+                parent
+                    .children
+                    .push(Rc::new(SyntaxBranch::Node(node.clone())));
                 parent.text_len += builder.text_len;
             }
 
@@ -99,9 +132,10 @@ impl Parser {
             self.parse_value(source);
         }
 
-        let root = self.builder.finish_node().unwrap_or_else(|| {
-            SyntaxNode::new(SyntaxKind::ERROR, 0, Vec::new())
-        });
+        let root = self
+            .builder
+            .finish_node()
+            .unwrap_or_else(|| SyntaxNode::new(SyntaxKind::ERROR, 0, Vec::new()));
 
         (root, self.errors)
     }
@@ -117,11 +151,72 @@ impl Parser {
     fn advance(&mut self, source: &str) -> bool {
         if let Some(token) = self.current_token() {
             let token_clone = token.clone();
-            self.builder.add_token(token_clone.clone(), source, self.offset);
+            self.builder
+                .add_token(token_clone.clone(), source, self.offset);
             self.offset += token_clone.len;
             self.current += 1;
             true
         } else {
+            false
+        }
+    }
+
+    fn advance_with_trivia(&mut self, source: &str) -> bool {
+        let leading_trivia = self.collect_leading_trivia(source);
+
+        if let Some(token) = self.current_token() {
+            let token_clone = token.clone();
+            let current_offset = self.offset;
+
+            // Advance past the main token
+            self.offset += token_clone.len;
+            self.current += 1;
+
+            let trailing_trivia = self.collect_trailing_trivia(source);
+
+            self.builder.add_token_with_trivia(
+                token_clone,
+                source,
+                current_offset,
+                leading_trivia,
+                trailing_trivia,
+            );
+
+            true
+        } else {
+            false
+        }
+    }
+
+    fn expect_token_with_trivia(&mut self, expected: TokenKind, source: &str) -> bool {
+        let leading_trivia = self.collect_leading_trivia(source);
+
+        if let Some(token) = self.current_token() {
+            if std::mem::discriminant(&token.kind) == std::mem::discriminant(&expected) {
+                let token_clone = token.clone();
+                let current_offset = self.offset;
+
+                // Advance past the main token
+                self.offset += token_clone.len;
+                self.current += 1;
+
+                let trailing_trivia = self.collect_trailing_trivia(source);
+
+                self.builder.add_token_with_trivia(
+                    token_clone,
+                    source,
+                    current_offset,
+                    leading_trivia,
+                    trailing_trivia,
+                );
+
+                true
+            } else {
+                self.add_error(format!("Expected {:?}, found {:?}", expected, token.kind));
+                false
+            }
+        } else {
+            self.add_error(format!("Expected {:?}, found EOF", expected));
             false
         }
     }
@@ -148,58 +243,136 @@ impl Parser {
         });
     }
 
-    fn skip_trivia(&mut self, source: &str) {
+    fn collect_leading_trivia(&mut self, source: &str) -> Vec<SyntaxToken> {
+        let mut trivia = Vec::new();
         while let Some(token) = self.current_token() {
             match token.kind {
                 TokenKind::Whitespace | TokenKind::LineComment => {
-                    self.advance(source);
+                    let token_clone = token.clone();
+                    let start = self.offset;
+                    let end = start + token_clone.len;
+                    let text = if end <= source.len() {
+                        &source[start..end]
+                    } else {
+                        ""
+                    };
+
+                    let trivia_token = SyntaxToken::new(
+                        token_kind_to_syntax_kind(token_clone.kind),
+                        text.to_string(),
+                    );
+                    trivia.push(trivia_token);
+
+                    self.offset += token_clone.len;
+                    self.current += 1;
                 }
                 _ => break,
             }
         }
+        trivia
+    }
+
+    fn collect_trailing_trivia(&mut self, source: &str) -> Vec<SyntaxToken> {
+        let mut trivia = Vec::new();
+
+        // Look ahead for trivia that should be attached to the previous token
+        while let Some(token) = self.current_token() {
+            match token.kind {
+                TokenKind::Whitespace => {
+                    // Only collect whitespace if it doesn't contain newlines
+                    // (newlines typically start leading trivia for the next token)
+                    let token_clone = token.clone();
+                    let start = self.offset;
+                    let end = start + token_clone.len;
+                    let text = if end <= source.len() {
+                        &source[start..end]
+                    } else {
+                        ""
+                    };
+
+                    if text.contains('\n') {
+                        break; // Stop at newlines
+                    }
+
+                    let trivia_token = SyntaxToken::new(
+                        token_kind_to_syntax_kind(token_clone.kind),
+                        text.to_string(),
+                    );
+                    trivia.push(trivia_token);
+
+                    self.offset += token_clone.len;
+                    self.current += 1;
+                }
+                TokenKind::LineComment => {
+                    // Line comments are typically trailing
+                    let token_clone = token.clone();
+                    let start = self.offset;
+                    let end = start + token_clone.len;
+                    let text = if end <= source.len() {
+                        &source[start..end]
+                    } else {
+                        ""
+                    };
+
+                    let trivia_token = SyntaxToken::new(
+                        token_kind_to_syntax_kind(token_clone.kind),
+                        text.to_string(),
+                    );
+                    trivia.push(trivia_token);
+
+                    self.offset += token_clone.len;
+                    self.current += 1;
+                }
+                _ => break,
+            }
+        }
+        trivia
     }
 
     fn parse_value(&mut self, source: &str) -> bool {
-        self.skip_trivia(source);
-
         if let Some(token) = self.current_token() {
             match token.kind {
+                TokenKind::Whitespace | TokenKind::LineComment => {
+                    // Skip trivia and try again
+                    self.collect_leading_trivia(source);
+                    return self.parse_value(source);
+                }
                 TokenKind::LeftCurly => self.parse_object(source),
                 TokenKind::LeftBracket => self.parse_array(source),
                 TokenKind::String { .. } => {
                     self.builder.start_node(SyntaxKind::STRING);
-                    self.advance(source);
+                    self.advance_with_trivia(source);
                     self.builder.finish_node();
                     true
                 }
                 TokenKind::Number => {
                     self.builder.start_node(SyntaxKind::NUMBER);
-                    self.advance(source);
+                    self.advance_with_trivia(source);
                     self.builder.finish_node();
                     true
                 }
                 TokenKind::True => {
                     self.builder.start_node(SyntaxKind::TRUE);
-                    self.advance(source);
+                    self.advance_with_trivia(source);
                     self.builder.finish_node();
                     true
                 }
                 TokenKind::False => {
                     self.builder.start_node(SyntaxKind::FALSE);
-                    self.advance(source);
+                    self.advance_with_trivia(source);
                     self.builder.finish_node();
                     true
                 }
                 TokenKind::Null => {
                     self.builder.start_node(SyntaxKind::NULL);
-                    self.advance(source);
+                    self.advance_with_trivia(source);
                     self.builder.finish_node();
                     true
                 }
                 _ => {
                     self.add_error(format!("Unexpected token: {:?}", token.kind));
                     self.builder.start_node(SyntaxKind::ERROR);
-                    self.advance(source);
+                    self.advance_with_trivia(source);
                     self.builder.finish_node();
                     false
                 }
@@ -213,17 +386,15 @@ impl Parser {
     fn parse_object(&mut self, source: &str) -> bool {
         self.builder.start_node(SyntaxKind::OBJECT);
 
-        if !self.expect_token(TokenKind::LeftCurly, source) {
+        if !self.expect_token_with_trivia(TokenKind::LeftCurly, source) {
             self.builder.finish_node();
             return false;
         }
 
-        self.skip_trivia(source);
-
-        // Handle empty object
+        // Check for empty object
         if let Some(token) = self.current_token() {
             if matches!(token.kind, TokenKind::RightCurly) {
-                self.advance(source);
+                self.advance_with_trivia(source);
                 self.builder.finish_node();
                 return true;
             }
@@ -231,41 +402,20 @@ impl Parser {
 
         // Parse object fields
         loop {
-            self.skip_trivia(source);
-
-            // Parse key
-            if !self.expect_token(TokenKind::String { terminated: true }, source) {
+            if !self.parse_object_field(source) {
                 self.recover_to_object_sync_point(source);
                 break;
             }
-
-            self.skip_trivia(source);
-
-            // Parse colon
-            if !self.expect_token(TokenKind::Colon, source) {
-                self.recover_to_object_sync_point(source);
-                break;
-            }
-
-            self.skip_trivia(source);
-
-            // Parse value
-            if !self.parse_value(source) {
-                self.recover_to_object_sync_point(source);
-                break;
-            }
-
-            self.skip_trivia(source);
 
             // Check for comma or end
             if let Some(token) = self.current_token() {
                 match token.kind {
                     TokenKind::Comma => {
-                        self.advance(source);
+                        self.advance_with_trivia(source);
                         continue;
                     }
                     TokenKind::RightCurly => {
-                        self.advance(source);
+                        self.advance_with_trivia(source);
                         break;
                     }
                     _ => {
@@ -284,20 +434,43 @@ impl Parser {
         true
     }
 
-    fn parse_array(&mut self, source: &str) -> bool {
-        self.builder.start_node(SyntaxKind::ARRAY);
+    fn parse_object_field(&mut self, source: &str) -> bool {
+        self.builder.start_node(SyntaxKind::OBJECT_FIELD);
 
-        if !self.expect_token(TokenKind::LeftBracket, source) {
+        // Parse key
+        if !self.expect_token_with_trivia(TokenKind::String { terminated: true }, source) {
             self.builder.finish_node();
             return false;
         }
 
-        self.skip_trivia(source);
+        // Parse colon
+        if !self.expect_token_with_trivia(TokenKind::Colon, source) {
+            self.builder.finish_node();
+            return false;
+        }
+
+        // Parse value
+        if !self.parse_value(source) {
+            self.builder.finish_node();
+            return false;
+        }
+
+        self.builder.finish_node();
+        true
+    }
+
+    fn parse_array(&mut self, source: &str) -> bool {
+        self.builder.start_node(SyntaxKind::ARRAY);
+
+        if !self.expect_token_with_trivia(TokenKind::LeftBracket, source) {
+            self.builder.finish_node();
+            return false;
+        }
 
         // Handle empty array
         if let Some(token) = self.current_token() {
             if matches!(token.kind, TokenKind::RightBracket) {
-                self.advance(source);
+                self.advance_with_trivia(source);
                 self.builder.finish_node();
                 return true;
             }
@@ -305,24 +478,20 @@ impl Parser {
 
         // Parse array elements
         loop {
-            self.skip_trivia(source);
-
-            if !self.parse_value(source) {
+            if !self.parse_array_element(source) {
                 self.recover_to_array_sync_point(source);
                 break;
             }
-
-            self.skip_trivia(source);
 
             // Check for comma or end
             if let Some(token) = self.current_token() {
                 match token.kind {
                     TokenKind::Comma => {
-                        self.advance(source);
+                        self.advance_with_trivia(source);
                         continue;
                     }
                     TokenKind::RightBracket => {
-                        self.advance(source);
+                        self.advance_with_trivia(source);
                         break;
                     }
                     _ => {
@@ -335,6 +504,18 @@ impl Parser {
                 self.add_error("Unterminated array".to_string());
                 break;
             }
+        }
+
+        self.builder.finish_node();
+        true
+    }
+
+    fn parse_array_element(&mut self, source: &str) -> bool {
+        self.builder.start_node(SyntaxKind::ARRAY_ELEMENT);
+
+        if !self.parse_value(source) {
+            self.builder.finish_node();
+            return false;
         }
 
         self.builder.finish_node();
@@ -392,8 +573,9 @@ pub fn parse(source: &str) -> (SyntaxNode, Vec<ParseError>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::nodes::*;
     use crate::ast::AstNode;
+    use crate::ast::AstToken;
+    use crate::ast::nodes::*;
 
     #[test]
     fn test_parse_simple_string() {
@@ -606,5 +788,158 @@ mod tests {
         let (tree, errors) = parse("   \t\n  ");
         assert!(!errors.is_empty());
         assert_eq!(tree.kind(), SyntaxKind::ROOT);
+    }
+
+    #[test]
+    fn test_trivia_preservation_in_object() {
+        let json = r#"{
+            "key1": "value1",  // comment1
+            "key2": "value2"   // comment2
+        }"#;
+
+        let (tree, errors) = parse(json);
+        assert!(errors.is_empty(), "Errors: {:?}", errors);
+
+        let root = Root::cast(tree).unwrap();
+        let value = root.value().unwrap();
+        let object = value.as_object().unwrap();
+
+        // Check that we have OBJECT_FIELD nodes
+        let fields: Vec<_> = object.fields().collect();
+        assert_eq!(fields.len(), 2);
+
+        // Verify field structure
+        let first_field = &fields[0];
+        assert!(first_field.key().is_some());
+        assert!(first_field.value().is_some());
+    }
+
+    #[test]
+    fn test_trivia_preservation_in_array() {
+        let json = r#"[
+            1,  // first number
+            2,  // second number
+            3   // third number
+        ]"#;
+
+        let (tree, errors) = parse(json);
+        assert!(errors.is_empty(), "Errors: {:?}", errors);
+
+        let root = Root::cast(tree).unwrap();
+        let value = root.value().unwrap();
+        let array = value.as_array().unwrap();
+
+        // Check that we have ARRAY_ELEMENT nodes
+        let elements: Vec<_> = array.elements().collect();
+        assert_eq!(elements.len(), 3);
+
+        // Verify element structure
+        for element in elements {
+            assert!(element.value().is_some());
+        }
+    }
+
+    #[test]
+    fn test_object_field_structure() {
+        let (tree, errors) = parse(r#"{"name": "John", "age": 30}"#);
+        assert!(errors.is_empty());
+
+        let root = Root::cast(tree).unwrap();
+        let value = root.value().unwrap();
+        let object = value.as_object().unwrap();
+
+        let fields: Vec<_> = object.fields().collect();
+        assert_eq!(fields.len(), 2);
+
+        // Check first field
+        let first_field = &fields[0];
+        assert!(first_field.key().is_some());
+        assert!(first_field.value().is_some());
+
+        let key = first_field.key().unwrap();
+        assert_eq!(key.text(), r#""name""#);
+    }
+
+    #[test]
+    fn test_array_element_structure() {
+        let (tree, errors) = parse(r#"[1, "hello", true]"#);
+        assert!(errors.is_empty());
+
+        let root = Root::cast(tree).unwrap();
+        let value = root.value().unwrap();
+        let array = value.as_array().unwrap();
+
+        let elements: Vec<_> = array.elements().collect();
+        assert_eq!(elements.len(), 3);
+
+        // Check each element has a value
+        for element in elements {
+            assert!(element.value().is_some());
+        }
+    }
+
+    #[test]
+    fn test_nested_structure_with_trivia() {
+        let json = r#"{
+            "user": {
+                "name": "Alice",  // user name
+                "hobbies": [
+                    "reading",  // hobby 1
+                    "coding"    // hobby 2
+                ]
+            }
+        }"#;
+
+        let (tree, errors) = parse(json);
+        assert!(errors.is_empty(), "Errors: {:?}", errors);
+
+        let root = Root::cast(tree).unwrap();
+        let value = root.value().unwrap();
+        let outer_object = value.as_object().unwrap();
+
+        let fields: Vec<_> = outer_object.fields().collect();
+        assert_eq!(fields.len(), 1);
+
+        let user_field = &fields[0];
+        let user_value = user_field.value().unwrap();
+        let user_object = user_value.as_object().unwrap();
+
+        let user_fields: Vec<_> = user_object.fields().collect();
+        assert_eq!(user_fields.len(), 2);
+
+        // Find hobbies field
+        let hobbies_field = user_fields
+            .iter()
+            .find(|field| field.key().map_or(false, |k| k.text() == r#""hobbies""#))
+            .unwrap();
+
+        let hobbies_value = hobbies_field.value().unwrap();
+        let hobbies_array = hobbies_value.as_array().unwrap();
+
+        let hobby_elements: Vec<_> = hobbies_array.elements().collect();
+        assert_eq!(hobby_elements.len(), 2);
+    }
+
+    #[test]
+    fn test_empty_structures_preserve_trivia() {
+        let (tree, errors) = parse("{ }");
+        assert!(errors.is_empty());
+
+        let root = Root::cast(tree).unwrap();
+        let value = root.value().unwrap();
+        let object = value.as_object().unwrap();
+
+        let fields: Vec<_> = object.fields().collect();
+        assert_eq!(fields.len(), 0);
+
+        let (tree, errors) = parse("[ ]");
+        assert!(errors.is_empty());
+
+        let root = Root::cast(tree).unwrap();
+        let value = root.value().unwrap();
+        let array = value.as_array().unwrap();
+
+        let elements: Vec<_> = array.elements().collect();
+        assert_eq!(elements.len(), 0);
     }
 }

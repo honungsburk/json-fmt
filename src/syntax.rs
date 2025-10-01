@@ -51,11 +51,27 @@ impl SyntaxNode {
 pub struct SyntaxToken {
     kind: SyntaxKind,
     text: String,
+    leading_trivia: Vec<SyntaxToken>,
+    trailing_trivia: Vec<SyntaxToken>,
 }
 
 impl SyntaxToken {
     pub fn new(kind: SyntaxKind, text: String) -> Self {
-        Self { kind, text }
+        Self {
+            kind,
+            text,
+            leading_trivia: Vec::new(),
+            trailing_trivia: Vec::new(),
+        }
+    }
+
+    pub fn new_with_trivia(
+        kind: SyntaxKind,
+        text: String,
+        leading_trivia: Vec<SyntaxToken>,
+        trailing_trivia: Vec<SyntaxToken>,
+    ) -> Self {
+        Self { kind, text, leading_trivia, trailing_trivia }
     }
 
     pub fn kind(&self) -> SyntaxKind {
@@ -64,6 +80,33 @@ impl SyntaxToken {
 
     pub fn text(&self) -> &str {
         &self.text
+    }
+
+    pub fn leading_trivia(&self) -> &[SyntaxToken] {
+        &self.leading_trivia
+    }
+
+    pub fn trailing_trivia(&self) -> &[SyntaxToken] {
+        &self.trailing_trivia
+    }
+
+    pub fn full_text(&self) -> String {
+        let mut result = String::new();
+
+        // Add leading trivia
+        for trivia in &self.leading_trivia {
+            result.push_str(trivia.text());
+        }
+
+        // Add main text
+        result.push_str(&self.text);
+
+        // Add trailing trivia
+        for trivia in &self.trailing_trivia {
+            result.push_str(trivia.text());
+        }
+
+        result
     }
 }
 
@@ -96,6 +139,8 @@ pub enum SyntaxKind {
     //Structure
     OBJECT,
     ARRAY,
+    OBJECT_FIELD,      // "key": value pair
+    ARRAY_ELEMENT,     // Individual array element wrapper
 
     // Values
     STRING,
