@@ -106,10 +106,6 @@ impl TreeBuilder {
             None
         }
     }
-
-    fn current_text_len(&self) -> usize {
-        self.stack.last().map_or(0, |b| b.text_len)
-    }
 }
 
 impl Parser {
@@ -142,10 +138,6 @@ impl Parser {
 
     fn current_token(&self) -> Option<&Token> {
         self.tokens.get(self.current)
-    }
-
-    fn peek_token(&self) -> Option<&Token> {
-        self.tokens.get(self.current + 1)
     }
 
     fn advance(&mut self, source: &str) -> bool {
