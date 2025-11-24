@@ -82,20 +82,10 @@ fn format_primitive(doc: &mut Doc<'static>, value: &JsonValue) {
 
 /// Format a JSON object
 fn format_object(doc: &mut Doc<'static>, object: &JsonObject) {
-    let fields: Vec<_> = object.fields().collect();
-
-    if fields.is_empty() {
-        // Empty object - dense format: {}
-        format_token_from_children(doc, object.syntax(), SyntaxKind::L_CURLY);
-        format_token_from_children(doc, object.syntax(), SyntaxKind::R_CURLY);
-        return;
-    }
+    doc.tag("{");
 
     // Non-empty object with grouping
     doc.tag_with(Tag::Group(120), |doc| {
-        format_token_from_children(doc, object.syntax(), SyntaxKind::L_CURLY);
-
-        doc.tag_if(Tag::Space, If::Flat);
         doc.tag_if(Tag::Break(1), If::Broken);
 
         doc.tag_with(Tag::Indent(2), |doc| {
@@ -116,69 +106,29 @@ fn format_object(doc: &mut Doc<'static>, object: &JsonObject) {
                     }
                 } else if let SyntaxBranch::Token(token) = child.as_ref() {
                     if token.kind() == SyntaxKind::COMMA {
-                        doc.tag(token.text().to_string());
-                        // Handle trailing trivia (comments) on commas
-                        for trivia in token.trailing_trivia() {
-                            if trivia.kind() == SyntaxKind::COMMENT {
-                                doc.tag(Tag::Space);
-                                doc.tag(trivia.text().to_string());
-                                doc.tag(Tag::Break(1));
-                            }
-                        }
+                        format_token(doc, token);
                     }
                 }
             }
         });
 
-        doc.tag_if(Tag::Space, If::Flat);
         doc.tag_if(Tag::Break(1), If::Broken);
-        format_token_from_children(doc, object.syntax(), SyntaxKind::R_CURLY);
     });
+    doc.tag("}");
 }
 
 /// Format a JSON object field
 fn format_object_field(doc: &mut Doc<'static>, field: &crate::ast::nodes::JsonObjectField) {
-    // Format the key with trivia
-    if let Some(key) = field.key() {
-        // Add leading comments before the key
-        for child in field.syntax().children() {
-            if let SyntaxBranch::Token(token) = child.as_ref() {
-                if token.kind() == SyntaxKind::STRING {
-                    for trivia in token.leading_trivia() {
-                        if trivia.kind() == SyntaxKind::COMMENT {
-                            doc.tag(trivia.text().to_string());
-                            doc.tag(Tag::Break(1));
-                        }
-                    }
-                    doc.tag(key.text().to_string());
-
-                    // Add trailing comments after the key
-                    for trivia in token.trailing_trivia() {
-                        if trivia.kind() == SyntaxKind::COMMENT {
-                            doc.tag(Tag::Space);
-                            doc.tag(trivia.text().to_string());
-                            doc.tag(Tag::Break(1));
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    // Format the colon
-    format_token_from_children(doc, field.syntax(), SyntaxKind::COLON);
-    doc.tag(Tag::Space);
-
-    // Format the value
-    if let Some(value) = field.value() {
+    if let Some((key, colon, value)) = field.parts() {
+        format_token(doc, &key);
+        format_token(doc, &colon);
+        doc.tag(Tag::Space);
         format_value(doc, &value);
     }
 }
 
 /// Format a JSON array
 fn format_array(doc: &mut Doc<'static>, array: &JsonArray) {
-    // Non-empty array with grouping
     doc.tag("[");
 
     doc.tag_with(Tag::Group(120), |doc| {
@@ -212,22 +162,6 @@ fn format_array(doc: &mut Doc<'static>, array: &JsonArray) {
         doc.tag_if(Tag::Break(1), If::Broken);
     });
     doc.tag("]");
-}
-
-/// Helper to find and format a specific token type from children
-fn format_token_from_children(
-    doc: &mut Doc<'static>,
-    node: &crate::syntax::SyntaxNode,
-    kind: SyntaxKind,
-) {
-    for child in node.children() {
-        if let SyntaxBranch::Token(token) = child.as_ref() {
-            if token.kind() == kind {
-                format_token(doc, token);
-                return;
-            }
-        }
-    }
 }
 
 fn format_token(doc: &mut Doc<'static>, token: &SyntaxToken) {
@@ -308,7 +242,7 @@ mod tests {
         let options = Options { max_columns: 120 };
         let result = format_json(json, &options).unwrap();
         // Should fit on one line with proper spacing
-        assert_eq!(result, r#"{ "name": "John" }"#);
+        assert_eq!(result, r#"{"name": "John"}"#);
     }
 
     #[test]

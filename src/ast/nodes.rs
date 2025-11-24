@@ -1,6 +1,9 @@
 // https://github.com/rust-lang/rust-analyzer/blob/36a70b7435c48837018c71576d7bb4e8f763f501/crates/syntax/src/ast/generated/nodes.rs
 
-use crate::{ast::{AstNode, AstToken}, syntax::*};
+use crate::{
+    ast::{AstNode, AstToken},
+    syntax::*,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Root {
@@ -33,14 +36,13 @@ impl AstNode for Root {
 
 impl Root {
     pub fn value(&self) -> Option<JsonValue> {
-        self.syntax.children().iter()
-            .find_map(|child| {
-                if let SyntaxBranch::Node(node) = child.as_ref() {
-                    JsonValue::cast(node.clone())
-                } else {
-                    None
-                }
-            })
+        self.syntax.children().iter().find_map(|child| {
+            if let SyntaxBranch::Node(node) = child.as_ref() {
+                JsonValue::cast(node.clone())
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -57,10 +59,16 @@ impl std::fmt::Display for JsonValue {
 
 impl AstNode for JsonValue {
     fn can_cast(kind: SyntaxKind) -> bool {
-        matches!(kind,
-            SyntaxKind::OBJECT | SyntaxKind::ARRAY | SyntaxKind::STRING |
-            SyntaxKind::NUMBER | SyntaxKind::TRUE | SyntaxKind::FALSE | SyntaxKind::NULL |
-            SyntaxKind::ARRAY_ELEMENT
+        matches!(
+            kind,
+            SyntaxKind::OBJECT
+                | SyntaxKind::ARRAY
+                | SyntaxKind::STRING
+                | SyntaxKind::NUMBER
+                | SyntaxKind::TRUE
+                | SyntaxKind::FALSE
+                | SyntaxKind::NULL
+                | SyntaxKind::ARRAY_ELEMENT
         )
     }
 
@@ -96,14 +104,13 @@ impl JsonValue {
 
     pub fn as_string(&self) -> Option<crate::ast::tokens::String> {
         if self.syntax.kind() == SyntaxKind::STRING {
-            self.syntax.children().iter()
-                .find_map(|child| {
-                    if let SyntaxBranch::Token(token) = child.as_ref() {
-                        crate::ast::tokens::String::cast(token.clone())
-                    } else {
-                        None
-                    }
-                })
+            self.syntax.children().iter().find_map(|child| {
+                if let SyntaxBranch::Token(token) = child.as_ref() {
+                    crate::ast::tokens::String::cast(token.clone())
+                } else {
+                    None
+                }
+            })
         } else {
             None
         }
@@ -111,14 +118,13 @@ impl JsonValue {
 
     pub fn as_number(&self) -> Option<crate::ast::tokens::Number> {
         if self.syntax.kind() == SyntaxKind::NUMBER {
-            self.syntax.children().iter()
-                .find_map(|child| {
-                    if let SyntaxBranch::Token(token) = child.as_ref() {
-                        crate::ast::tokens::Number::cast(token.clone())
-                    } else {
-                        None
-                    }
-                })
+            self.syntax.children().iter().find_map(|child| {
+                if let SyntaxBranch::Token(token) = child.as_ref() {
+                    crate::ast::tokens::Number::cast(token.clone())
+                } else {
+                    None
+                }
+            })
         } else {
             None
         }
@@ -156,14 +162,13 @@ impl AstNode for JsonObject {
 
 impl JsonObject {
     pub fn fields(&self) -> impl Iterator<Item = JsonObjectField> {
-        self.syntax.children().iter()
-            .filter_map(|child| {
-                if let SyntaxBranch::Node(node) = child.as_ref() {
-                    JsonObjectField::cast(node.clone())
-                } else {
-                    None
-                }
-            })
+        self.syntax.children().iter().filter_map(|child| {
+            if let SyntaxBranch::Node(node) = child.as_ref() {
+                JsonObjectField::cast(node.clone())
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -197,30 +202,51 @@ impl AstNode for JsonObjectField {
 }
 
 impl JsonObjectField {
-    pub fn key(&self) -> Option<crate::ast::tokens::String> {
-        self.syntax.children().iter()
-            .find_map(|child| {
-                if let SyntaxBranch::Token(token) = child.as_ref() {
-                    if token.kind() == SyntaxKind::STRING {
-                        crate::ast::tokens::String::cast(token.clone())
-                    } else {
-                        None
+    pub fn parts(&self) -> Option<(&SyntaxToken, &SyntaxToken, JsonValue)> {
+        match self.syntax.children() {
+            [key, colon, value] => {
+                // Now match on the Rc contents
+                match (key.as_ref(), colon.as_ref(), value.as_ref()) {
+                    (
+                        SyntaxBranch::Token(key_token),
+                        SyntaxBranch::Token(colon_token),
+                        SyntaxBranch::Node(val),
+                    ) => {
+                        if let Some(val_val) = JsonValue::cast(val.clone()) {
+                            Some((key_token, colon_token, val_val))
+                        } else {
+                            None
+                        }
                     }
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub fn key(&self) -> Option<crate::ast::tokens::String> {
+        self.syntax.children().iter().find_map(|child| {
+            if let SyntaxBranch::Token(token) = child.as_ref() {
+                if token.kind() == SyntaxKind::STRING {
+                    crate::ast::tokens::String::cast(token.clone())
                 } else {
                     None
                 }
-            })
+            } else {
+                None
+            }
+        })
     }
 
     pub fn value(&self) -> Option<JsonValue> {
-        self.syntax.children().iter()
-            .find_map(|child| {
-                if let SyntaxBranch::Node(node) = child.as_ref() {
-                    JsonValue::cast(node.clone())
-                } else {
-                    None
-                }
-            })
+        self.syntax.children().iter().find_map(|child| {
+            if let SyntaxBranch::Node(node) = child.as_ref() {
+                JsonValue::cast(node.clone())
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -255,14 +281,13 @@ impl AstNode for JsonArray {
 
 impl JsonArray {
     pub fn elements(&self) -> impl Iterator<Item = JsonArrayElement> {
-        self.syntax.children().iter()
-            .filter_map(|child| {
-                if let SyntaxBranch::Node(node) = child.as_ref() {
-                    JsonArrayElement::cast(node.clone())
-                } else {
-                    None
-                }
-            })
+        self.syntax.children().iter().filter_map(|child| {
+            if let SyntaxBranch::Node(node) = child.as_ref() {
+                JsonArrayElement::cast(node.clone())
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -297,13 +322,12 @@ impl AstNode for JsonArrayElement {
 
 impl JsonArrayElement {
     pub fn value(&self) -> Option<JsonValue> {
-        self.syntax.children().iter()
-            .find_map(|child| {
-                if let SyntaxBranch::Node(node) = child.as_ref() {
-                    JsonValue::cast(node.clone())
-                } else {
-                    None
-                }
-            })
+        self.syntax.children().iter().find_map(|child| {
+            if let SyntaxBranch::Node(node) = child.as_ref() {
+                JsonValue::cast(node.clone())
+            } else {
+                None
+            }
+        })
     }
 }
