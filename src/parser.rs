@@ -47,7 +47,7 @@ impl TreeBuilder {
         let text = if end <= source.len() {
             &source[start..end]
         } else {
-            ""
+            panic!("This branch should never be reached?");
         };
 
         let syntax_token =
@@ -73,7 +73,7 @@ impl TreeBuilder {
         let text = if end <= source.len() {
             &source[start..end]
         } else {
-            ""
+            panic!("This branch should never be reached?");
         };
 
         let syntax_token = SyntaxToken::new_with_trivia(
