@@ -10,8 +10,8 @@
 //! For example, the Allman brace style (for which this crate is named) can
 //! be implemented as follows:
 //!
-//! ```
-//! # use allman::*;
+//! ```no_run
+//! # use json_fmt::formatter::*;
 //! // flat: fn foo() { ... }
 //! //
 //! // broken:
