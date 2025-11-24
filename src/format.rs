@@ -178,26 +178,15 @@ fn format_object_field(doc: &mut Doc<'static>, field: &crate::ast::nodes::JsonOb
 
 /// Format a JSON array
 fn format_array(doc: &mut Doc<'static>, array: &JsonArray) {
-    let elements: Vec<_> = array.elements().collect();
-
-    if elements.is_empty() {
-        // Empty array - dense format: []
-        format_token_from_children(doc, array.syntax(), SyntaxKind::L_BRACK);
-        format_token_from_children(doc, array.syntax(), SyntaxKind::R_BRACK);
-        return;
-    }
-
     // Non-empty array with grouping
+    doc.tag("[");
+
     doc.tag_with(Tag::Group(120), |doc| {
-        format_token_from_children(doc, array.syntax(), SyntaxKind::L_BRACK);
-
-        doc.tag_if(Tag::Space, If::Flat);
         doc.tag_if(Tag::Break(1), If::Broken);
-
+        // Walk through all children to get elements and commas in order
         doc.tag_with(Tag::Indent(2), |doc| {
-            // Walk through all children to get elements and commas in order
             let mut element_count = 0;
-            for child in array.syntax().children() {
+            for child in array.syntax.children() {
                 if let SyntaxBranch::Node(node) = child.as_ref() {
                     if node.kind() == SyntaxKind::ARRAY_ELEMENT {
                         if let Some(element) =
@@ -215,23 +204,14 @@ fn format_array(doc: &mut Doc<'static>, array: &JsonArray) {
                     }
                 } else if let SyntaxBranch::Token(token) = child.as_ref() {
                     if token.kind() == SyntaxKind::COMMA {
-                        doc.tag(token.text().to_string());
-                        // Handle trailing trivia (comments) on commas
-                        for trivia in token.trailing_trivia() {
-                            if trivia.kind() == SyntaxKind::COMMENT {
-                                doc.tag(Tag::Space);
-                                doc.tag(trivia.text().to_string());
-                            }
-                        }
+                        format_token(doc, token);
                     }
                 }
             }
         });
-
-        doc.tag_if(Tag::Space, If::Flat);
         doc.tag_if(Tag::Break(1), If::Broken);
-        format_token_from_children(doc, array.syntax(), SyntaxKind::R_BRACK);
     });
+    doc.tag("]");
 }
 
 /// Helper to find and format a specific token type from children
@@ -359,7 +339,7 @@ mod tests {
         let options = Options { max_columns: 120 };
         let result = format_json(json, &options).unwrap();
         // Arrays format with spaces inside brackets when flat: [ elem, elem ]
-        assert_eq!(result, "[ 1, 2, 3 ]");
+        assert_eq!(result, "[1, 2, 3]");
     }
 
     #[test]
