@@ -1,3 +1,6 @@
+//! Note: this code was stolen from this blogpost
+//! https://mcyoung.xyz/2025/03/11/formatters/
+//!
 //! `allman` - A code formatting and line reflowing toolkit. 🗒️🖋️
 //!
 //! [`allman::Doc`][Doc] is a DOM-like structure that specifies how indentation,
