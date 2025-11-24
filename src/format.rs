@@ -1,9 +1,9 @@
 //! JSON formatter that converts AST to the formatter Doc representation
 
-use crate::ast::{AstNode, AstToken};
 use crate::ast::nodes::{JsonArray, JsonObject, JsonValue, Root};
+use crate::ast::{AstNode, AstToken};
 use crate::formatter::{Doc, If, Options, Tag};
-use crate::syntax::{SyntaxBranch, SyntaxKind};
+use crate::syntax::{SyntaxBranch, SyntaxKind, SyntaxToken};
 
 /// Format a JSON string with the given options
 pub fn format_json(source: &str, options: &Options) -> Result<String, String> {
@@ -40,24 +40,14 @@ fn format_value(doc: &mut Doc<'static>, value: &JsonValue) {
                 format_array(doc, &arr);
             }
         }
-        SyntaxKind::STRING | SyntaxKind::NUMBER |
-        SyntaxKind::TRUE | SyntaxKind::FALSE | SyntaxKind::NULL => {
+        SyntaxKind::STRING
+        | SyntaxKind::NUMBER
+        | SyntaxKind::TRUE
+        | SyntaxKind::FALSE
+        | SyntaxKind::NULL => {
             format_primitive(doc, value);
         }
-        SyntaxKind::ARRAY_ELEMENT => {
-            // This shouldn't happen at the value level, but handle it
-            if let Some(child_value) = value.syntax().children().iter()
-                .find_map(|child| {
-                    if let SyntaxBranch::Node(node) = child.as_ref() {
-                        JsonValue::cast(node.clone())
-                    } else {
-                        None
-                    }
-                }) {
-                format_value(doc, &child_value);
-            }
-        }
-        _ => {}
+        _ => panic!("Invalid value to format!"),
     }
 }
 
@@ -82,6 +72,7 @@ fn format_primitive(doc: &mut Doc<'static>, value: &JsonValue) {
                 if trivia.kind() == SyntaxKind::COMMENT {
                     doc.tag(Tag::Space);
                     doc.tag(trivia.text().to_string());
+                    doc.tag(Tag::Break(1));
                 }
             }
             break;
@@ -113,7 +104,8 @@ fn format_object(doc: &mut Doc<'static>, object: &JsonObject) {
             for child in object.syntax().children() {
                 if let SyntaxBranch::Node(node) = child.as_ref() {
                     if node.kind() == SyntaxKind::OBJECT_FIELD {
-                        if let Some(field) = crate::ast::nodes::JsonObjectField::cast(node.clone()) {
+                        if let Some(field) = crate::ast::nodes::JsonObjectField::cast(node.clone())
+                        {
                             if field_count > 0 {
                                 doc.tag_if(Tag::Space, If::Flat);
                                 doc.tag_if(Tag::Break(1), If::Broken);
@@ -130,6 +122,7 @@ fn format_object(doc: &mut Doc<'static>, object: &JsonObject) {
                             if trivia.kind() == SyntaxKind::COMMENT {
                                 doc.tag(Tag::Space);
                                 doc.tag(trivia.text().to_string());
+                                doc.tag(Tag::Break(1));
                             }
                         }
                     }
@@ -164,6 +157,7 @@ fn format_object_field(doc: &mut Doc<'static>, field: &crate::ast::nodes::JsonOb
                         if trivia.kind() == SyntaxKind::COMMENT {
                             doc.tag(Tag::Space);
                             doc.tag(trivia.text().to_string());
+                            doc.tag(Tag::Break(1));
                         }
                     }
                     break;
@@ -206,7 +200,9 @@ fn format_array(doc: &mut Doc<'static>, array: &JsonArray) {
             for child in array.syntax().children() {
                 if let SyntaxBranch::Node(node) = child.as_ref() {
                     if node.kind() == SyntaxKind::ARRAY_ELEMENT {
-                        if let Some(element) = crate::ast::nodes::JsonArrayElement::cast(node.clone()) {
+                        if let Some(element) =
+                            crate::ast::nodes::JsonArrayElement::cast(node.clone())
+                        {
                             if element_count > 0 {
                                 doc.tag_if(Tag::Space, If::Flat);
                                 doc.tag_if(Tag::Break(1), If::Broken);
@@ -239,13 +235,36 @@ fn format_array(doc: &mut Doc<'static>, array: &JsonArray) {
 }
 
 /// Helper to find and format a specific token type from children
-fn format_token_from_children(doc: &mut Doc<'static>, node: &crate::syntax::SyntaxNode, kind: SyntaxKind) {
+fn format_token_from_children(
+    doc: &mut Doc<'static>,
+    node: &crate::syntax::SyntaxNode,
+    kind: SyntaxKind,
+) {
     for child in node.children() {
         if let SyntaxBranch::Token(token) = child.as_ref() {
             if token.kind() == kind {
-                doc.tag(token.text().to_string());
+                format_token(doc, token);
                 return;
             }
+        }
+    }
+}
+
+fn format_token(doc: &mut Doc<'static>, token: &SyntaxToken) {
+    for trivia in token.leading_trivia() {
+        if trivia.kind() == SyntaxKind::COMMENT {
+            doc.tag(trivia.text().to_string());
+            doc.tag(Tag::Break(1));
+        }
+    }
+    doc.tag(token.text().to_string());
+
+    // Add trailing comments after the key
+    for trivia in token.trailing_trivia() {
+        if trivia.kind() == SyntaxKind::COMMENT {
+            doc.tag(Tag::Space);
+            doc.tag(trivia.text().to_string());
+            doc.tag(Tag::Break(1));
         }
     }
 }
