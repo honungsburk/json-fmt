@@ -1,7 +1,7 @@
 //! JSON formatter that converts AST to the formatter Doc representation
 
 use crate::ast::nodes::{JsonArray, JsonObject, JsonValue, Root};
-use crate::ast::{AstNode, AstToken};
+use crate::ast::AstNode;
 use crate::formatter::{Doc, If, Options, Tag};
 use crate::syntax::{SyntaxBranch, SyntaxKind, SyntaxToken};
 
@@ -119,10 +119,14 @@ fn format_object(doc: &mut Doc<'static>, object: &JsonObject) {
 
 /// Format a JSON object field
 fn format_object_field(doc: &mut Doc<'static>, field: &crate::ast::nodes::JsonObjectField) {
-    if let Some((key, colon, value)) = field.parts() {
-        format_token(doc, &key);
-        format_token(doc, &colon);
-        doc.tag(Tag::Space);
+    if let Some(key) = field.key_token() {
+        format_token(doc, key);
+    }
+    if let Some(colon) = field.colon_token() {
+        format_token(doc, colon);
+    }
+    doc.tag(Tag::Space);
+    if let Some(value) = field.value() {
         format_value(doc, &value);
     }
 }
