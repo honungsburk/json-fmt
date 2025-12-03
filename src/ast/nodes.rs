@@ -214,14 +214,14 @@ impl JsonObject {
                 if let SyntaxBranch::Node(node) = child.as_ref() {
                     if let Some(field) = JsonObjectField::cast(node.clone()) {
                         // Check if next token is a comma and clone it
-                        let comma = iter.peek().and_then(|next_child| {
-                            match next_child.as_ref() {
+                        let comma = iter
+                            .peek()
+                            .and_then(|next_child| match next_child.as_ref() {
                                 SyntaxBranch::Token(token) if token.kind() == SyntaxKind::COMMA => {
                                     Some(token.clone())
                                 }
                                 _ => None,
-                            }
-                        });
+                            });
 
                         // If we found a comma, consume it
                         if comma.is_some() {
@@ -272,21 +272,14 @@ impl JsonObjectField {
     const COLON_INDEX: usize = 1;
     const VALUE_INDEX: usize = 2;
 
-    pub fn key(&self) -> Option<crate::ast::tokens::String> {
-        match self.syntax.children().get(Self::KEY_INDEX)?.as_ref() {
-            SyntaxBranch::Token(token) => crate::ast::tokens::String::cast(token.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn key_token(&self) -> Option<&SyntaxToken> {
+    pub fn key(&self) -> Option<&SyntaxToken> {
         match self.syntax.children().get(Self::KEY_INDEX)?.as_ref() {
             SyntaxBranch::Token(token) => Some(token),
             _ => None,
         }
     }
 
-    pub fn colon_token(&self) -> Option<&SyntaxToken> {
+    pub fn colon(&self) -> Option<&SyntaxToken> {
         match self.syntax.children().get(Self::COLON_INDEX)?.as_ref() {
             SyntaxBranch::Token(token) => Some(token),
             _ => None,
@@ -298,11 +291,6 @@ impl JsonObjectField {
             SyntaxBranch::Node(node) => JsonValue::cast(node.clone()),
             _ => None,
         }
-    }
-
-    /// Get all parts of the object field at once
-    pub fn parts(&self) -> Option<(crate::ast::tokens::String, &SyntaxToken, JsonValue)> {
-        Some((self.key()?, self.colon_token()?, self.value()?))
     }
 }
 
@@ -379,14 +367,14 @@ impl JsonArray {
                 if let SyntaxBranch::Node(node) = child.as_ref() {
                     if let Some(element) = JsonArrayElement::cast(node.clone()) {
                         // Check if next token is a comma and clone it
-                        let comma = iter.peek().and_then(|next_child| {
-                            match next_child.as_ref() {
+                        let comma = iter
+                            .peek()
+                            .and_then(|next_child| match next_child.as_ref() {
                                 SyntaxBranch::Token(token) if token.kind() == SyntaxKind::COMMA => {
                                     Some(token.clone())
                                 }
                                 _ => None,
-                            }
-                        });
+                            });
 
                         // If we found a comma, consume it
                         if comma.is_some() {

@@ -84,10 +84,10 @@ fn format_object(doc: &mut Doc<'static>, object: &JsonObject) {
 
 /// Format a JSON object field
 fn format_object_field(doc: &mut Doc<'static>, field: &crate::ast::nodes::JsonObjectField) {
-    if let Some(key) = field.key_token() {
+    if let Some(key) = field.key() {
         format_token(doc, key);
     }
-    if let Some(colon) = field.colon_token() {
+    if let Some(colon) = field.colon() {
         format_token(doc, colon);
     }
     doc.tag(Tag::Space);
