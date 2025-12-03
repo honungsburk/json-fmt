@@ -10,7 +10,8 @@ fn main() {
     println!("Output:\n{}\n", formatted);
 
     // Example 2: Nested structure
-    let nested = r#"{"user":{"name":"Bob","address":{"city":"NYC","zip":"10001"}},"items":[1,2,3,4,5]}"#;
+    let nested =
+        r#"{"user":{"name":"Bob","address":{"city":"NYC","zip":"10001"}},"items":[1,2,3,4,5]}"#;
     println!("=== Nested Structure ===");
     println!("Input: {}", nested);
     let formatted = format_json(nested, &Options { max_columns: 120 }).unwrap();
@@ -42,7 +43,8 @@ fn main() {
     println!("Output:\n{}\n", formatted);
 
     // Example 6: Array of objects
-    let array_of_objects = r#"[{"id":1,"name":"Item1"},{"id":2,"name":"Item2"},{"id":3,"name":"Item3"}]"#;
+    let array_of_objects =
+        r#"[{"id":1,"name":"Item1"},{"id":2,"name":"Item2"},{"id":3,"name":"Item3"}]"#;
     println!("=== Array of Objects ===");
     println!("Input: {}", array_of_objects);
     let formatted = format_json(array_of_objects, &Options { max_columns: 120 }).unwrap();
@@ -53,5 +55,24 @@ fn main() {
     println!("=== Empty Structures ===");
     println!("Input: {}", empty);
     let formatted = format_json(empty, &Options { max_columns: 120 }).unwrap();
+    println!("Output:\n{}\n", formatted);
+
+    let json_with_trivia = r#"{
+        "name": "Alice",      // User's name
+        "age": 30,           // User's age
+        "hobbies": [
+            "reading" // First hobby
+            ,       
+            "coding",        // Second hobby
+            "swimming"       // Third hobby
+        ], // lol
+        "address": {
+            "street": "123 Main St",
+            "city": "Anytown"
+        }
+    }"#;
+    println!("=== JSON With Trivia ===");
+    println!("Input: {}", json_with_trivia);
+    let formatted = format_json(json_with_trivia, &Options { max_columns: 120 }).unwrap();
     println!("Output:\n{}\n", formatted);
 }

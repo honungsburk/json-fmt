@@ -129,6 +129,16 @@ impl JsonValue {
             None
         }
     }
+
+    /// For primitive values (STRING, NUMBER, TRUE, FALSE, NULL), get the token at index 0
+    /// Primitive values always have exactly one child: a token
+    pub fn primitive_token(&self) -> Option<&SyntaxToken> {
+        const TOKEN_INDEX: usize = 0;
+        match self.syntax.children().get(TOKEN_INDEX)?.as_ref() {
+            SyntaxBranch::Token(token) => Some(token),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -160,6 +170,13 @@ impl AstNode for JsonObject {
     }
 }
 
+/// Represents a field in an object along with its trailing comma (if present)
+#[derive(Debug, Clone)]
+pub struct ObjectFieldWithComma {
+    pub field: JsonObjectField,
+    pub comma: Option<SyntaxToken>,
+}
+
 impl JsonObject {
     pub fn l_curly_token(&self) -> Option<&SyntaxToken> {
         match self.syntax.children().first()?.as_ref() {
@@ -182,6 +199,40 @@ impl JsonObject {
             } else {
                 None
             }
+        })
+    }
+
+    /// Returns an iterator over fields with their trailing commas
+    /// Structure: L_CURLY, FIELD, [COMMA, FIELD]*, R_CURLY
+    pub fn fields_with_commas(&self) -> impl Iterator<Item = ObjectFieldWithComma> {
+        let children = self.syntax.children();
+        let mut iter = children.iter().peekable();
+
+        std::iter::from_fn(move || {
+            // Skip until we find a field node
+            while let Some(child) = iter.next() {
+                if let SyntaxBranch::Node(node) = child.as_ref() {
+                    if let Some(field) = JsonObjectField::cast(node.clone()) {
+                        // Check if next token is a comma and clone it
+                        let comma = iter.peek().and_then(|next_child| {
+                            match next_child.as_ref() {
+                                SyntaxBranch::Token(token) if token.kind() == SyntaxKind::COMMA => {
+                                    Some(token.clone())
+                                }
+                                _ => None,
+                            }
+                        });
+
+                        // If we found a comma, consume it
+                        if comma.is_some() {
+                            iter.next();
+                        }
+
+                        return Some(ObjectFieldWithComma { field, comma });
+                    }
+                }
+            }
+            None
         })
     }
 }
@@ -255,6 +306,13 @@ impl JsonObjectField {
     }
 }
 
+/// Represents an element in an array along with its trailing comma (if present)
+#[derive(Debug, Clone)]
+pub struct ArrayElementWithComma {
+    pub element: JsonArrayElement,
+    pub comma: Option<SyntaxToken>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct JsonArray {
     pub(crate) syntax: SyntaxNode,
@@ -306,6 +364,40 @@ impl JsonArray {
             } else {
                 None
             }
+        })
+    }
+
+    /// Returns an iterator over elements with their trailing commas
+    /// Structure: L_BRACK, ELEMENT, [COMMA, ELEMENT]*, R_BRACK
+    pub fn elements_with_commas(&self) -> impl Iterator<Item = ArrayElementWithComma> {
+        let children = self.syntax.children();
+        let mut iter = children.iter().peekable();
+
+        std::iter::from_fn(move || {
+            // Skip until we find an element node
+            while let Some(child) = iter.next() {
+                if let SyntaxBranch::Node(node) = child.as_ref() {
+                    if let Some(element) = JsonArrayElement::cast(node.clone()) {
+                        // Check if next token is a comma and clone it
+                        let comma = iter.peek().and_then(|next_child| {
+                            match next_child.as_ref() {
+                                SyntaxBranch::Token(token) if token.kind() == SyntaxKind::COMMA => {
+                                    Some(token.clone())
+                                }
+                                _ => None,
+                            }
+                        });
+
+                        // If we found a comma, consume it
+                        if comma.is_some() {
+                            iter.next();
+                        }
+
+                        return Some(ArrayElementWithComma { element, comma });
+                    }
+                }
+            }
+            None
         })
     }
 }

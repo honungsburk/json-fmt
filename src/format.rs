@@ -1,9 +1,9 @@
 //! JSON formatter that converts AST to the formatter Doc representation
 
-use crate::ast::nodes::{JsonArray, JsonObject, JsonValue, Root};
 use crate::ast::AstNode;
+use crate::ast::nodes::{JsonArray, JsonObject, JsonValue, Root};
 use crate::formatter::{Doc, If, Options, Tag};
-use crate::syntax::{SyntaxBranch, SyntaxKind, SyntaxToken};
+use crate::syntax::{SyntaxKind, SyntaxToken};
 
 /// Format a JSON string with the given options
 pub fn format_json(source: &str, options: &Options) -> Result<String, String> {
@@ -53,68 +53,33 @@ fn format_value(doc: &mut Doc<'static>, value: &JsonValue) {
 
 /// Format a primitive value (string, number, boolean, null)
 fn format_primitive(doc: &mut Doc<'static>, value: &JsonValue) {
-    // Get the first token from the value's children
-    for child in value.syntax().children() {
-        if let SyntaxBranch::Token(token) = child.as_ref() {
-            // Add leading trivia (comments and whitespace)
-            for trivia in token.leading_trivia() {
-                if trivia.kind() == SyntaxKind::COMMENT {
-                    doc.tag(trivia.text().to_string());
-                    doc.tag(Tag::Break(1));
-                }
-            }
-
-            // Add the actual token text
-            doc.tag(token.text().to_string());
-
-            // Add trailing trivia (comments)
-            for trivia in token.trailing_trivia() {
-                if trivia.kind() == SyntaxKind::COMMENT {
-                    doc.tag(Tag::Space);
-                    doc.tag(trivia.text().to_string());
-                    doc.tag(Tag::Break(1));
-                }
-            }
-            break;
-        }
+    if let Some(token) = value.primitive_token() {
+        format_token(doc, token);
     }
 }
 
 /// Format a JSON object
 fn format_object(doc: &mut Doc<'static>, object: &JsonObject) {
-    doc.tag("{");
+    maybe_format_token(doc, object.l_curly_token());
 
     // Non-empty object with grouping
     doc.tag_with(Tag::Group(120), |doc| {
         doc.tag_if(Tag::Break(1), If::Broken);
 
         doc.tag_with(Tag::Indent(2), |doc| {
-            // Walk through all children to get fields and commas in order
-            let mut field_count = 0;
-            for child in object.syntax().children() {
-                if let SyntaxBranch::Node(node) = child.as_ref() {
-                    if node.kind() == SyntaxKind::OBJECT_FIELD {
-                        if let Some(field) = crate::ast::nodes::JsonObjectField::cast(node.clone())
-                        {
-                            if field_count > 0 {
-                                doc.tag_if(Tag::Space, If::Flat);
-                                doc.tag_if(Tag::Break(1), If::Broken);
-                            }
-                            format_object_field(doc, &field);
-                            field_count += 1;
-                        }
-                    }
-                } else if let SyntaxBranch::Token(token) = child.as_ref() {
-                    if token.kind() == SyntaxKind::COMMA {
-                        format_token(doc, token);
-                    }
+            for (index, field_with_comma) in object.fields_with_commas().enumerate() {
+                if index > 0 {
+                    doc.tag_if(Tag::Space, If::Flat);
+                    doc.tag_if(Tag::Break(1), If::Broken);
                 }
+                format_object_field(doc, &field_with_comma.field);
+                maybe_format_token(doc, field_with_comma.comma.as_ref());
             }
         });
 
         doc.tag_if(Tag::Break(1), If::Broken);
     });
-    doc.tag("}");
+    maybe_format_token(doc, object.r_curly_token());
 }
 
 /// Format a JSON object field
@@ -133,39 +98,31 @@ fn format_object_field(doc: &mut Doc<'static>, field: &crate::ast::nodes::JsonOb
 
 /// Format a JSON array
 fn format_array(doc: &mut Doc<'static>, array: &JsonArray) {
-    doc.tag("[");
+    maybe_format_token(doc, array.l_bracket_token());
 
     doc.tag_with(Tag::Group(120), |doc| {
         doc.tag_if(Tag::Break(1), If::Broken);
-        // Walk through all children to get elements and commas in order
         doc.tag_with(Tag::Indent(2), |doc| {
-            let mut element_count = 0;
-            for child in array.syntax.children() {
-                if let SyntaxBranch::Node(node) = child.as_ref() {
-                    if node.kind() == SyntaxKind::ARRAY_ELEMENT {
-                        if let Some(element) =
-                            crate::ast::nodes::JsonArrayElement::cast(node.clone())
-                        {
-                            if element_count > 0 {
-                                doc.tag_if(Tag::Space, If::Flat);
-                                doc.tag_if(Tag::Break(1), If::Broken);
-                            }
-                            if let Some(value) = element.value() {
-                                format_value(doc, &value);
-                            }
-                            element_count += 1;
-                        }
-                    }
-                } else if let SyntaxBranch::Token(token) = child.as_ref() {
-                    if token.kind() == SyntaxKind::COMMA {
-                        format_token(doc, token);
-                    }
+            for (index, element_with_comma) in array.elements_with_commas().enumerate() {
+                if index > 0 {
+                    doc.tag_if(Tag::Space, If::Flat);
+                    doc.tag_if(Tag::Break(1), If::Broken);
                 }
+                if let Some(value) = element_with_comma.element.value() {
+                    format_value(doc, &value);
+                }
+                maybe_format_token(doc, element_with_comma.comma.as_ref());
             }
         });
         doc.tag_if(Tag::Break(1), If::Broken);
     });
-    doc.tag("]");
+    maybe_format_token(doc, array.r_bracket_token());
+}
+
+fn maybe_format_token(doc: &mut Doc<'static>, maybe_token: Option<&SyntaxToken>) {
+    if let Some(token) = maybe_token {
+        format_token(doc, token);
+    }
 }
 
 fn format_token(doc: &mut Doc<'static>, token: &SyntaxToken) {
