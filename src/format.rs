@@ -1,4 +1,7 @@
 //! JSON formatter that converts AST to the formatter Doc representation
+//!
+//! Note: The formatter API deisng only works when the AST is known to be well formed.
+//! It is bad design if the AST might be bad.
 
 use crate::ast::AstNode;
 use crate::ast::nodes::{JsonArray, JsonObject, JsonValue, Root};
@@ -17,7 +20,7 @@ pub fn format_json(source: &str, options: &Options) -> Result<String, String> {
     let mut doc = Doc::<'static>::new();
 
     if let Some(value) = root.value() {
-        format_value(&mut doc, &value);
+        format_value(&mut doc, &value)?
     }
 
     let mut output = Vec::new();
@@ -28,38 +31,40 @@ pub fn format_json(source: &str, options: &Options) -> Result<String, String> {
 }
 
 /// Format a JSON value into the Doc
-fn format_value(doc: &mut Doc<'static>, value: &JsonValue) {
+fn format_value(doc: &mut Doc<'static>, value: &JsonValue) -> Result<(), String> {
     match value.syntax().kind() {
         SyntaxKind::OBJECT => {
             if let Some(obj) = value.as_object() {
-                format_object(doc, &obj);
+                format_object(doc, &obj)?
             }
+            Ok(())
         }
         SyntaxKind::ARRAY => {
             if let Some(arr) = value.as_array() {
                 format_array(doc, &arr);
             }
+            Ok(())
         }
         SyntaxKind::STRING
         | SyntaxKind::NUMBER
         | SyntaxKind::TRUE
         | SyntaxKind::FALSE
-        | SyntaxKind::NULL => {
-            format_primitive(doc, value);
-        }
-        _ => panic!("Invalid value to format!"),
+        | SyntaxKind::NULL => format_primitive(doc, value),
+        _ => Err("Invalid value to format!".to_string()),
     }
 }
 
 /// Format a primitive value (string, number, boolean, null)
-fn format_primitive(doc: &mut Doc<'static>, value: &JsonValue) {
+fn format_primitive(doc: &mut Doc<'static>, value: &JsonValue) -> Result<(), String> {
     if let Some(token) = value.primitive_token() {
-        format_token(doc, token);
+        format_token(doc, token)
+    } else {
+        Err("Expected primitive".to_string())
     }
 }
 
 /// Format a JSON object
-fn format_object(doc: &mut Doc<'static>, object: &JsonObject) {
+fn format_object(doc: &mut Doc<'static>, object: &JsonObject) -> Result<(), String> {
     maybe_format_token(doc, object.l_curly_token());
 
     // Non-empty object with grouping
@@ -72,7 +77,8 @@ fn format_object(doc: &mut Doc<'static>, object: &JsonObject) {
                     doc.tag_if(Tag::Space, If::Flat);
                     doc.tag_if(Tag::Break(1), If::Broken);
                 }
-                format_object_field(doc, &field_with_comma.field);
+                format_object_field(doc, &field_with_comma.field)
+                    .expect("expected comma_with_field");
                 maybe_format_token(doc, field_with_comma.comma.as_ref());
             }
         });
@@ -80,20 +86,26 @@ fn format_object(doc: &mut Doc<'static>, object: &JsonObject) {
         doc.tag_if(Tag::Break(1), If::Broken);
     });
     maybe_format_token(doc, object.r_curly_token());
+
+    Ok(())
 }
 
 /// Format a JSON object field
-fn format_object_field(doc: &mut Doc<'static>, field: &crate::ast::nodes::JsonObjectField) {
+fn format_object_field(
+    doc: &mut Doc<'static>,
+    field: &crate::ast::nodes::JsonObjectField,
+) -> Result<(), String> {
     if let Some(key) = field.key() {
-        format_token(doc, key);
+        format_token(doc, key)?
     }
     if let Some(colon) = field.colon() {
-        format_token(doc, colon);
+        format_token(doc, colon)?
     }
     doc.tag(Tag::Space);
     if let Some(value) = field.value() {
-        format_value(doc, &value);
+        format_value(doc, &value)?
     }
+    Ok(())
 }
 
 /// Format a JSON array
@@ -109,7 +121,7 @@ fn format_array(doc: &mut Doc<'static>, array: &JsonArray) {
                     doc.tag_if(Tag::Break(1), If::Broken);
                 }
                 if let Some(value) = element_with_comma.element.value() {
-                    format_value(doc, &value);
+                    format_value(doc, &value).expect("Expected Value");
                 }
                 maybe_format_token(doc, element_with_comma.comma.as_ref());
             }
@@ -121,11 +133,11 @@ fn format_array(doc: &mut Doc<'static>, array: &JsonArray) {
 
 fn maybe_format_token(doc: &mut Doc<'static>, maybe_token: Option<&SyntaxToken>) {
     if let Some(token) = maybe_token {
-        format_token(doc, token);
+        format_token(doc, token).expect("expected token");
     }
 }
 
-fn format_token(doc: &mut Doc<'static>, token: &SyntaxToken) {
+fn format_token(doc: &mut Doc<'static>, token: &SyntaxToken) -> Result<(), String> {
     for trivia in token.leading_trivia() {
         if trivia.kind() == SyntaxKind::COMMENT {
             doc.tag(trivia.text().to_string());
@@ -142,6 +154,7 @@ fn format_token(doc: &mut Doc<'static>, token: &SyntaxToken) {
             doc.tag(Tag::Break(1));
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
