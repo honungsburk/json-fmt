@@ -88,11 +88,11 @@ fn format_object(doc: &mut Doc<'static>, object: &JsonObject) -> Result<(), Stri
                 format_object_field(doc, &field_with_comma.field)?;
                 maybe_format_token(doc, field_with_comma.comma.as_ref());
             }
-            Ok::<(), String>(())
+            ok()
         })?;
 
         doc.tag_if(Tag::Break(1), If::Broken);
-        Ok::<(), String>(())
+        ok()
     })?;
     maybe_format_token(doc, object.r_curly_token());
 
@@ -134,10 +134,10 @@ fn format_array(doc: &mut Doc<'static>, array: &JsonArray) -> Result<(), String>
                 }
                 maybe_format_token(doc, element_with_comma.comma.as_ref());
             }
-            Ok::<(), String>(())
+            ok()
         })?;
         doc.tag_if(Tag::Break(1), If::Broken);
-        Ok::<(), String>(())
+        ok()
     })?;
     maybe_format_token(doc, array.r_bracket_token());
     Ok(())
@@ -166,6 +166,10 @@ fn format_token(doc: &mut Doc<'static>, token: &SyntaxToken) -> Result<(), Strin
             doc.tag(Tag::Break(1));
         }
     }
+    Ok(())
+}
+
+fn ok() -> Result<(), String> {
     Ok(())
 }
 

@@ -494,7 +494,6 @@ pub fn parse(source: &str) -> (SyntaxNode, Vec<ParseError>) {
 mod tests {
     use super::*;
     use crate::ast::AstNode;
-    use crate::ast::AstToken;
     use crate::ast::nodes::*;
 
     #[test]
