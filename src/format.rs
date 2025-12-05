@@ -8,23 +8,26 @@
 use crate::ast::AstNode;
 use crate::ast::nodes::{JsonArray, JsonObject, JsonValue, Root};
 use crate::formatter::{Doc, If, Options, Tag};
+use crate::parser::ParseError;
 use crate::syntax::{SyntaxKind, SyntaxToken};
 
-// pub enum FormatError {
-//     InvalidValueKind(SyntaxKind),
-//     MalformedNode { kind: SyntaxKind, reason: String },
-//     RenderError(String),
-// }
+#[derive(Debug)]
+pub enum FormatError {
+    InvalidValueKind(SyntaxKind),
+    MalformedNode { kind: SyntaxKind, reason: String },
+    RenderError(String),
+    ParseErrors(Vec<ParseError>),
+}
 
 /// Format a JSON string with the given options
-pub fn format_json(source: &str, options: &Options) -> Result<String, String> {
+pub fn format_json(source: &str, options: &Options) -> Result<String, FormatError> {
     let (tree, errors) = crate::parser::parse(source);
 
     if !errors.is_empty() {
-        return Err(format!("Parse errors: {:?}", errors));
+        return Err(FormatError::ParseErrors(errors));
     }
 
-    let root = Root::cast(tree).ok_or("Failed to cast root")?;
+    let root = Root::cast(tree).ok_or(FormatError::RenderError("Expected Root".to_string()))?;
     let mut doc = Doc::<'static>::new();
 
     if let Some(value) = root.value() {
@@ -33,13 +36,13 @@ pub fn format_json(source: &str, options: &Options) -> Result<String, String> {
 
     let mut output = Vec::new();
     doc.render(&mut output, options)
-        .map_err(|e| format!("Render error: {}", e))?;
+        .map_err(|e| FormatError::RenderError(format!("Render error: {}", e)))?;
 
-    String::from_utf8(output).map_err(|e| format!("UTF-8 error: {}", e))
+    String::from_utf8(output).map_err(|e| FormatError::RenderError(format!("UTF-8 error: {}", e)))
 }
 
 /// Format a JSON value into the Doc
-fn format_value(doc: &mut Doc<'static>, value: &JsonValue) -> Result<(), String> {
+fn format_value(doc: &mut Doc<'static>, value: &JsonValue) -> Result<(), FormatError> {
     match value.syntax().kind() {
         SyntaxKind::OBJECT => {
             if let Some(obj) = value.as_object() {
@@ -58,21 +61,27 @@ fn format_value(doc: &mut Doc<'static>, value: &JsonValue) -> Result<(), String>
         | SyntaxKind::TRUE
         | SyntaxKind::FALSE
         | SyntaxKind::NULL => format_primitive(doc, value),
-        _ => Err("Invalid value to format!".to_string()),
+        _ => Err(FormatError::MalformedNode {
+            kind: value.syntax.kind(),
+            reason: "Expected a json value".to_string(),
+        }),
     }
 }
 
 /// Format a primitive value (string, number, boolean, null)
-fn format_primitive(doc: &mut Doc<'static>, value: &JsonValue) -> Result<(), String> {
+fn format_primitive(doc: &mut Doc<'static>, value: &JsonValue) -> Result<(), FormatError> {
     if let Some(token) = value.primitive_token() {
         format_token(doc, token)
     } else {
-        Err("Expected primitive".to_string())
+        Err(FormatError::MalformedNode {
+            kind: value.syntax.kind(),
+            reason: "Expected a primitive json value".to_string(),
+        })
     }
 }
 
 /// Format a JSON object
-fn format_object(doc: &mut Doc<'static>, object: &JsonObject) -> Result<(), String> {
+fn format_object(doc: &mut Doc<'static>, object: &JsonObject) -> Result<(), FormatError> {
     maybe_format_token(doc, object.l_curly_token());
 
     // Non-empty object with grouping
@@ -103,7 +112,7 @@ fn format_object(doc: &mut Doc<'static>, object: &JsonObject) -> Result<(), Stri
 fn format_object_field(
     doc: &mut Doc<'static>,
     field: &crate::ast::nodes::JsonObjectField,
-) -> Result<(), String> {
+) -> Result<(), FormatError> {
     if let Some(key) = field.key() {
         format_token(doc, key)?
     }
@@ -118,7 +127,7 @@ fn format_object_field(
 }
 
 /// Format a JSON array
-fn format_array(doc: &mut Doc<'static>, array: &JsonArray) -> Result<(), String> {
+fn format_array(doc: &mut Doc<'static>, array: &JsonArray) -> Result<(), FormatError> {
     maybe_format_token(doc, array.l_bracket_token());
 
     doc.tag_with(Tag::Group(120), |doc| {
@@ -130,7 +139,7 @@ fn format_array(doc: &mut Doc<'static>, array: &JsonArray) -> Result<(), String>
                     doc.tag_if(Tag::Break(1), If::Broken);
                 }
                 if let Some(value) = element_with_comma.element.value() {
-                    format_value(doc, &value).expect("Expected Value");
+                    format_value(doc, &value)?;
                 }
                 maybe_format_token(doc, element_with_comma.comma.as_ref());
             }
@@ -145,11 +154,11 @@ fn format_array(doc: &mut Doc<'static>, array: &JsonArray) -> Result<(), String>
 
 fn maybe_format_token(doc: &mut Doc<'static>, maybe_token: Option<&SyntaxToken>) {
     if let Some(token) = maybe_token {
-        format_token(doc, token).expect("expected token");
+        _ = format_token(doc, token);
     }
 }
 
-fn format_token(doc: &mut Doc<'static>, token: &SyntaxToken) -> Result<(), String> {
+fn format_token(doc: &mut Doc<'static>, token: &SyntaxToken) -> Result<(), FormatError> {
     for trivia in token.leading_trivia() {
         if trivia.kind() == SyntaxKind::COMMENT {
             doc.tag(trivia.text().to_string());
@@ -169,7 +178,7 @@ fn format_token(doc: &mut Doc<'static>, token: &SyntaxToken) -> Result<(), Strin
     Ok(())
 }
 
-fn ok() -> Result<(), String> {
+fn ok() -> Result<(), FormatError> {
     Ok(())
 }
 
