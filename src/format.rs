@@ -26,8 +26,12 @@ pub fn format_json(source: &str, options: &Options) -> Result<String, FormatErro
     if !errors.is_empty() {
         return Err(FormatError::ParseErrors(errors));
     }
-
-    let root = Root::cast(tree).ok_or(FormatError::RenderError("Expected Root".to_string()))?;
+    // TODO: I do not like that cast eays the node. if cast fails the node is gone!
+    let real_kind = tree.kind();
+    let root = Root::cast(tree).ok_or(FormatError::MalformedNode {
+        kind: real_kind,
+        reason: "Expected Root".to_string(),
+    })?;
     let mut doc = Doc::<'static>::new();
 
     if let Some(value) = root.value() {
