@@ -2,11 +2,19 @@
 //!
 //! Note: The formatter API deisng only works when the AST is known to be well formed.
 //! It is bad design if the AST might be bad.
+//! one alternative design is that the AST bust be well formed when you get it, or you might not get a well formed string of the AST.
+//! then we have some way of checking AST validity.
 
 use crate::ast::AstNode;
 use crate::ast::nodes::{JsonArray, JsonObject, JsonValue, Root};
 use crate::formatter::{Doc, If, Options, Tag};
 use crate::syntax::{SyntaxKind, SyntaxToken};
+
+// pub enum FormatError {
+//     InvalidValueKind(SyntaxKind),
+//     MalformedNode { kind: SyntaxKind, reason: String },
+//     RenderError(String),
+// }
 
 /// Format a JSON string with the given options
 pub fn format_json(source: &str, options: &Options) -> Result<String, String> {
@@ -41,7 +49,7 @@ fn format_value(doc: &mut Doc<'static>, value: &JsonValue) -> Result<(), String>
         }
         SyntaxKind::ARRAY => {
             if let Some(arr) = value.as_array() {
-                format_array(doc, &arr);
+                format_array(doc, &arr)?;
             }
             Ok(())
         }
@@ -77,14 +85,15 @@ fn format_object(doc: &mut Doc<'static>, object: &JsonObject) -> Result<(), Stri
                     doc.tag_if(Tag::Space, If::Flat);
                     doc.tag_if(Tag::Break(1), If::Broken);
                 }
-                format_object_field(doc, &field_with_comma.field)
-                    .expect("expected comma_with_field");
+                format_object_field(doc, &field_with_comma.field)?;
                 maybe_format_token(doc, field_with_comma.comma.as_ref());
             }
-        });
+            Ok::<(), String>(())
+        })?;
 
         doc.tag_if(Tag::Break(1), If::Broken);
-    });
+        Ok::<(), String>(())
+    })?;
     maybe_format_token(doc, object.r_curly_token());
 
     Ok(())
@@ -109,7 +118,7 @@ fn format_object_field(
 }
 
 /// Format a JSON array
-fn format_array(doc: &mut Doc<'static>, array: &JsonArray) {
+fn format_array(doc: &mut Doc<'static>, array: &JsonArray) -> Result<(), String> {
     maybe_format_token(doc, array.l_bracket_token());
 
     doc.tag_with(Tag::Group(120), |doc| {
@@ -125,10 +134,13 @@ fn format_array(doc: &mut Doc<'static>, array: &JsonArray) {
                 }
                 maybe_format_token(doc, element_with_comma.comma.as_ref());
             }
-        });
+            Ok::<(), String>(())
+        })?;
         doc.tag_if(Tag::Break(1), If::Broken);
-    });
+        Ok::<(), String>(())
+    })?;
     maybe_format_token(doc, array.r_bracket_token());
+    Ok(())
 }
 
 fn maybe_format_token(doc: &mut Doc<'static>, maybe_token: Option<&SyntaxToken>) {

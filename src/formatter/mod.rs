@@ -33,10 +33,14 @@
 //!       .tag_if(Tag::Break(1), If::Broken)
 //!       .tag_with(Tag::Indent(2), |doc| {
 //!         // Brace contents here...
-//!       })
+//!         Ok::<(), String>(())
+//!       })?;
+//!
+//!     doc
 //!       .tag_if(Tag::Space, If::Flat)
 //!       .tag_if(Tag::Break(1), If::Broken)
 //!       .tag("}");
+//!     Ok::<(), String>(())
 //!   });
 //! ```
 //!
@@ -98,7 +102,10 @@ impl<'text> Doc<'text> {
 
     /// Inserts a new self-closing tag into this doc.
     pub fn tag(&mut self, tag: impl Into<Tag<'text>>) -> &mut Self {
-        self.tag_if_with(tag, None, |_| {})
+        match self.tag_if_with(tag, None, |_| Ok::<(), ()>(())) {
+            Ok(s) => s,
+            _ => panic!("This can never happen!"),
+        }
     }
 
     /// Inserts a new tag into this doc. The given closure can be used to insert
@@ -107,17 +114,20 @@ impl<'text> Doc<'text> {
     /// # Panics
     ///
     /// Panics if children are inserted and [`Tag::can_have_children()`] is false.
-    pub fn tag_with(
+    pub fn tag_with<E>(
         &mut self,
         tag: impl Into<Tag<'text>>,
-        body: impl FnOnce(&mut Self),
-    ) -> &mut Self {
+        body: impl FnOnce(&mut Self) -> Result<(), E>,
+    ) -> Result<&mut Self, E> {
         self.tag_if_with(tag, None, body)
     }
 
     /// Inserts a new tag into this doc, with an optional condition.
     pub fn tag_if(&mut self, tag: impl Into<Tag<'text>>, cond: impl Into<Option<If>>) -> &mut Self {
-        self.tag_if_with(tag, cond, |_| {})
+        match self.tag_if_with(tag, cond, |_| Ok::<(), ()>(())) {
+            Ok(s) => s,
+            _ => panic!("This can never happen!"),
+        }
     }
 
     /// Inserts a new tag into this doc, with an optional condition. The given
@@ -126,12 +136,12 @@ impl<'text> Doc<'text> {
     /// # Panics
     ///
     /// Panics if children are inserted and [`Tag::can_have_children()`] is false.
-    pub fn tag_if_with(
+    pub fn tag_if_with<E>(
         &mut self,
         tag: impl Into<Tag<'text>>,
         cond: impl Into<Option<If>>,
-        body: impl FnOnce(&mut Self),
-    ) -> &mut Self {
+        body: impl FnOnce(&mut Self) -> Result<(), E>,
+    ) -> Result<&mut Self, E> {
         let tag = tag.into();
         let compound = tag.can_have_children();
 
@@ -147,7 +157,7 @@ impl<'text> Doc<'text> {
             cond: cond.into(),
             measure: Cell::default(),
         });
-        body(self);
+        body(self)?;
 
         let len = self.tags.len() - idx - 1;
         assert!(
@@ -161,7 +171,7 @@ impl<'text> Doc<'text> {
         }
 
         self.tags[idx].len = len;
-        self
+        Ok(self)
     }
 
     fn cursor<'a>(&'a self) -> Cursor<'a> {
