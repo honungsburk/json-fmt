@@ -6,7 +6,7 @@
 //! then we have some way of checking AST validity.
 
 use crate::ast::AstNode;
-use crate::ast::nodes::{JsonArray, JsonObject, JsonValue, Root, ValueKind};
+use crate::ast::nodes::{JsonArray, JsonObject, JsonValue, Root};
 use crate::formatter::{Doc, If, Options, Tag};
 use crate::parser::ParseError;
 use crate::syntax::{SyntaxKind, SyntaxToken};
