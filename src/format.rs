@@ -6,7 +6,7 @@
 //! then we have some way of checking AST validity.
 
 use crate::ast::AstNode;
-use crate::ast::nodes::{JsonArray, JsonObject, JsonValue, Root};
+use crate::ast::nodes::{JsonArray, JsonObject, JsonValue, Root, ValueKind};
 use crate::formatter::{Doc, If, Options, Tag};
 use crate::parser::ParseError;
 use crate::syntax::{SyntaxKind, SyntaxToken};
@@ -47,43 +47,40 @@ pub fn format_json(source: &str, options: &Options) -> Result<String, FormatErro
 
 /// Format a JSON value into the Doc
 fn format_value(doc: &mut Doc<'static>, value: &JsonValue) -> Result<(), FormatError> {
-    match value.syntax().kind() {
-        SyntaxKind::OBJECT => {
-            if let Some(obj) = value.as_object() {
-                format_object(doc, &obj)?
-            }
-            Ok(())
+    if value.is_object() {
+        if let Some(obj) = value.as_object() {
+            format_object(doc, &obj)
+        } else {
+            Err(FormatError::MalformedNode {
+                kind: value.syntax.kind(),
+                reason: "Expected a json object".to_string(),
+            })
         }
-        SyntaxKind::ARRAY => {
-            if let Some(arr) = value.as_array() {
-                format_array(doc, &arr)?;
-            }
-            Ok(())
+    } else if value.is_array() {
+        if let Some(arr) = value.as_array() {
+            format_array(doc, &arr)
+        } else {
+            Err(FormatError::MalformedNode {
+                kind: value.syntax.kind(),
+                reason: "Expected a json array".to_string(),
+            })
         }
-        SyntaxKind::STRING
-        | SyntaxKind::NUMBER
-        | SyntaxKind::TRUE
-        | SyntaxKind::FALSE
-        | SyntaxKind::NULL => format_primitive(doc, value),
-        _ => Err(FormatError::MalformedNode {
-            kind: value.syntax.kind(),
-            reason: "Expected a json value".to_string(),
-        }),
-    }
-}
-
-/// Format a primitive value (string, number, boolean, null)
-fn format_primitive(doc: &mut Doc<'static>, value: &JsonValue) -> Result<(), FormatError> {
-    if let Some(token) = value.primitive_token() {
-        format_token(doc, token)
+    } else if value.is_primitive() {
+        if let Some(token) = value.primitive_token() {
+            format_token(doc, token)
+        } else {
+            Err(FormatError::MalformedNode {
+                kind: value.syntax.kind(),
+                reason: "Expected a primitive json value".to_string(),
+            })
+        }
     } else {
         Err(FormatError::MalformedNode {
             kind: value.syntax.kind(),
-            reason: "Expected a primitive json value".to_string(),
+            reason: "Expected a json value".to_string(),
         })
     }
 }
-
 /// Format a JSON object
 fn format_object(doc: &mut Doc<'static>, object: &JsonObject) -> Result<(), FormatError> {
     maybe_format_token(doc, object.l_curly_token());

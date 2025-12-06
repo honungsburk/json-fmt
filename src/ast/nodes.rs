@@ -56,6 +56,48 @@ impl std::fmt::Display for JsonValue {
         std::fmt::Display::fmt(&self.syntax, f)
     }
 }
+impl JsonValue {
+    pub fn is_object(&self) -> bool {
+        self.syntax.kind() == SyntaxKind::OBJECT
+    }
+
+    pub fn is_array(&self) -> bool {
+        self.syntax.kind() == SyntaxKind::ARRAY
+    }
+
+    pub fn is_primitive(&self) -> bool {
+        matches!(
+            self.syntax.kind(),
+            SyntaxKind::STRING
+                | SyntaxKind::NUMBER
+                | SyntaxKind::TRUE
+                | SyntaxKind::FALSE
+                | SyntaxKind::NULL
+        )
+    }
+
+    pub fn value_kind(&self) -> ValueKind {
+        match self.syntax.kind() {
+            SyntaxKind::OBJECT => ValueKind::Object,
+            SyntaxKind::ARRAY => ValueKind::Array,
+            SyntaxKind::STRING => ValueKind::String,
+            SyntaxKind::NUMBER => ValueKind::Number,
+            SyntaxKind::TRUE | SyntaxKind::FALSE => ValueKind::Boolean,
+            SyntaxKind::NULL => ValueKind::Null,
+            _ => ValueKind::Invalid,
+        }
+    }
+}
+
+pub enum ValueKind {
+    Object,
+    Array,
+    String,
+    Number,
+    Boolean,
+    Null,
+    Invalid,
+}
 
 impl AstNode for JsonValue {
     fn can_cast(kind: SyntaxKind) -> bool {
