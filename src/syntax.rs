@@ -38,7 +38,8 @@ impl SyntaxNode {
 
     /// Clones the tree creating an entire new subtree that is not just a ref to the old one
     pub fn clone_subtree(&self) -> SyntaxNode {
-        let new_children = self.children
+        let new_children = self
+            .children
             .iter()
             .map(|child| {
                 Rc::new(match child.as_ref() {
@@ -85,7 +86,12 @@ impl SyntaxToken {
         leading_trivia: Vec<SyntaxToken>,
         trailing_trivia: Vec<SyntaxToken>,
     ) -> Self {
-        Self { kind, text, leading_trivia, trailing_trivia }
+        Self {
+            kind,
+            text,
+            leading_trivia,
+            trailing_trivia,
+        }
     }
 
     pub fn kind(&self) -> SyntaxKind {
@@ -94,6 +100,20 @@ impl SyntaxToken {
 
     pub fn text(&self) -> &str {
         &self.text
+    }
+
+    /// Only get leading trivia that are comments
+    pub fn leading_comments(&self) -> impl Iterator<Item = &SyntaxToken> {
+        self.leading_trivia
+            .iter()
+            .filter(|t| t.kind() == SyntaxKind::COMMENT)
+    }
+
+    /// Only get trailing trivia that are comments
+    pub fn trailing_comments(&self) -> impl Iterator<Item = &SyntaxToken> {
+        self.trailing_trivia
+            .iter()
+            .filter(|t| t.kind() == SyntaxKind::COMMENT)
     }
 
     pub fn leading_trivia(&self) -> &[SyntaxToken] {
@@ -153,8 +173,8 @@ pub enum SyntaxKind {
     //Structure
     OBJECT,
     ARRAY,
-    OBJECT_FIELD,      // "key": value pair
-    ARRAY_ELEMENT,     // Individual array element wrapper
+    OBJECT_FIELD,  // "key": value pair
+    ARRAY_ELEMENT, // Individual array element wrapper
 
     // Values
     STRING,
@@ -189,7 +209,11 @@ mod tests {
         let inner_node = SyntaxNode::new(SyntaxKind::OBJECT, 5, vec![token2.clone()]);
         let inner_node_rc = Rc::new(SyntaxBranch::Node(inner_node));
 
-        let root = SyntaxNode::new(SyntaxKind::ROOT, 10, vec![token1.clone(), inner_node_rc.clone()]);
+        let root = SyntaxNode::new(
+            SyntaxKind::ROOT,
+            10,
+            vec![token1.clone(), inner_node_rc.clone()],
+        );
 
         // Clone the subtree
         let cloned = root.clone_subtree();
@@ -202,11 +226,17 @@ mod tests {
         // Verify that the Rc pointers are different (not the same Rc instance)
         let original_child1_ptr = Rc::as_ptr(&root.children()[0]);
         let cloned_child1_ptr = Rc::as_ptr(&cloned.children()[0]);
-        assert_ne!(original_child1_ptr, cloned_child1_ptr, "Child Rc should be different");
+        assert_ne!(
+            original_child1_ptr, cloned_child1_ptr,
+            "Child Rc should be different"
+        );
 
         let original_child2_ptr = Rc::as_ptr(&root.children()[1]);
         let cloned_child2_ptr = Rc::as_ptr(&cloned.children()[1]);
-        assert_ne!(original_child2_ptr, cloned_child2_ptr, "Child Rc should be different");
+        assert_ne!(
+            original_child2_ptr, cloned_child2_ptr,
+            "Child Rc should be different"
+        );
 
         // Verify nested node also has different Rc
         if let SyntaxBranch::Node(original_inner) = root.children()[1].as_ref() {
@@ -266,7 +296,10 @@ mod tests {
             if let SyntaxBranch::Node(cloned_field) = cloned.children()[1].as_ref() {
                 assert_eq!(original_field.kind(), cloned_field.kind());
                 assert_eq!(original_field.text_len(), cloned_field.text_len());
-                assert_eq!(original_field.children().len(), cloned_field.children().len());
+                assert_eq!(
+                    original_field.children().len(),
+                    cloned_field.children().len()
+                );
             } else {
                 panic!("Cloned field should be a Node");
             }

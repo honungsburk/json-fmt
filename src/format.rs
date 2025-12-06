@@ -163,21 +163,17 @@ fn maybe_format_token(doc: &mut Doc<'static>, maybe_token: Option<&SyntaxToken>)
 }
 
 fn format_token(doc: &mut Doc<'static>, token: &SyntaxToken) -> Result<(), FormatError> {
-    for trivia in token.leading_trivia() {
-        if trivia.kind() == SyntaxKind::COMMENT {
-            doc.tag(trivia.text().to_string());
-            doc.tag(Tag::Break(1));
-        }
+    for trivia in token.leading_comments() {
+        doc.tag(trivia.text().to_string());
+        doc.tag(Tag::Break(1));
     }
     doc.tag(token.text().to_string());
 
     // Add trailing comments after the key
-    for trivia in token.trailing_trivia() {
-        if trivia.kind() == SyntaxKind::COMMENT {
-            doc.tag(Tag::Space);
-            doc.tag(trivia.text().to_string());
-            doc.tag(Tag::Break(1));
-        }
+    for trivia in token.trailing_comments() {
+        doc.tag(Tag::Space);
+        doc.tag(trivia.text().to_string());
+        doc.tag(Tag::Break(1));
     }
     Ok(())
 }
