@@ -18,9 +18,5 @@ and these repos:
 
 TODO:
 
-- [ ] Hand written parser
-- [ ] CST
-- [ ] Layout Engine
-- [ ] Typed View
 - [ ] CLI
 - [ ] Fuzzing
